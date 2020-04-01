@@ -3,6 +3,7 @@ const path = require('path');                           //Solicito el modulo pat
 const flash = require('connect-flash');                 //Solicito a connect flash para compartir dato entre formularios/URL
 const session = require('express-session');             //Solicito el session para manejar sesiones
 const methodOverride = require('method-override');      //Solicito override para poder usar los metodos GET/POST/PUT//DELETE
+const passport = require('passport');                   //Solicito a passport de manera completa
 const Handlebars = require('handlebars');               //Solicito a handlerbars para manejar plantillas html/js
 const exphbs  = require('express-handlebars');          //Solicito a express handlebars para poder usarlo desde el servidor
 const {allowInsecurePrototypeAccess} = require('@handlebars/allow-prototype-access');   //Solicito este modulo para cuando renderice el .hbs pueda leer datos
@@ -10,6 +11,7 @@ const {allowInsecurePrototypeAccess} = require('@handlebars/allow-prototype-acce
 //Inicialization
 const app = express();                                  //Instancio a express en la constante app para poder usar sus metodos
 require('./database.js');                               //Mando a llamar a la base de datos
+require('./passport.js');                               //Mando a llamar la configuracion personalizada de passport para manejar logins
 
 //Settings
 app.set('port',process.env.PORT || 3000);               //Inicializo el puerto del servidor
@@ -34,15 +36,16 @@ app.use(session({                                     //Inicializo el modulo ses
   resave: true,
   saveUninitialized: true
 }));
+app.use(passport.initialize());                       //Inicializo a passport
+app.use(passport.session());                          //le indico a passport que utilizare seciones
 app.use(flash());                                     //A travez de este middleware puedo usar variables globales y compartirlas entre plantillas
-
 
 // Global Variables
 app.use((req, res, next) => {                         //Al utilizar flash desde routes este lo redireccionara a las variables locales
   res.locals.success_msg = req.flash('success_msg');  //las cuales mandaran llamar al partial correspondiente en el cual mostrara
   res.locals.error_msg = req.flash('error_msg');      //un mensaje de 'ok' o de 'error'
-  res.locals.error = req.flash('error');
-  res.locals.user = req.user || null;
+  res.locals.error = req.flash('error');              //Si passport retorna un error a travez de las variables globales este se mostrara a travez del partials.hbs
+  res.locals.user = req.user || null;                 //Si existe un usuario este se almacena en las variables globales, en caso contrario almacena un null
   next();                                             //Este metodo permite que continue el codigo y no se quede solo escuchando
 });                                                   //respuestas del cliente
 

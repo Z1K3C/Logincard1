@@ -7,6 +7,7 @@
           {{ title }}     <a href="/edit/{{_id}}"><i class="fas fa-edit" style="color: gray"></i></a>
         </h4>
         <p>{{ description }} </p>
+        <p>{{ date }}
         <!--DELETE REQUEST-->
         <form action="/delete/{{_id}}?_method=DELETE" method="POST">
           <input type="hidden" name="_method" value="DELETE">
@@ -16,7 +17,7 @@
     </div>
   </div>
   {{else}}
-  <div class="card mx-auto">
+  <div class="card mx-auto mt-4">
     <div class="card-body">
       <h1>Hello {{user.name}}</h1>
       <p clsss="lead">There are not Notes yet.</p>

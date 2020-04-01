@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');                           //Mando llamar al modulo mongoose para poder
                                                                 //utilizar metodos de conexion a DBs de mongodb
-mongoose.connect('mongodb://localhost/miprimerdb',{             //Utilizo connect con la URL, si la tabla no existe
+mongoose.connect('mongodb://localhost/notesdb',{             //Utilizo connect con la URL, si la tabla no existe
   useNewUrlParser: true,                                        //se crea despues del localhost/"nombredelatabla"
   useUnifiedTopology: true,
   useFindAndModify: false 

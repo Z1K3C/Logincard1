@@ -1,14 +1,17 @@
 const mongoose = require('mongoose');                     //Mando a llamar a mongoose para poder utilizar la DB
 const bcrypt = require("bcryptjs");                       //Mando a llamar bcrypt para poder cifrar passwords
+const moment = require('moment');                         //Mando a llamar a moment para poder dar formato a la fecha
 const { Schema } = mongoose;                              //De mongoose mando a llamar a Schema para poder crear una tabla
 
 const NoteSchema = new Schema(                            //Creo una tabla de nombre NoteSchema
   {
     title: {  type: String,  required: true },            //Creo una columna llamada title de tipo string
     description: {  type: String, required: true  },      //Creo una columna llamada description
-    user: { type: String, required: true}                 //Creo una columna llamada user
-  },
-  { timestamps: true  }                                   //Creo las columnas del time stamp
+    user: { type: String, required: true},                //Creo una columna llamada user
+    date: { type: String, default: function() {           //Cada que se cree un nuevo nota, en el schema mandara a llamar
+        return moment().format();                         //una funcion donde retornara la fecha en formato string
+      } } 
+  }
 );
 
 const UserSchema = new Schema({                           //Creo una tabla de nombre UserSchema
@@ -23,7 +26,7 @@ UserSchema.methods.encryptPassword = async function(password) {  //Creo un metod
   return await bcrypt.hash(password, salt);
 };
 
-UserSchema.methods.matchPassword = async function(password) {   //Creo un meotod asyncrono para comparar el password
+UserSchema.methods.matchPassword = async function(password) {   //Creo un meotodo asyncrono para comparar el password
   return await bcrypt.compare(password, this.password);
 };
 

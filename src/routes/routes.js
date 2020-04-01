@@ -1,6 +1,7 @@
 const express = require("express");                       //Mando llamar a express
 const router = express.Router();                          //Utilizo el motodo router de express
-
+const passport = require('passport');                     //Mando llamar a passport completo
+const moment = require('moment');                         //Mando a llamar a moment para poder dar formato a la fecha
 const { Note, User } = require("../schema.js");           //De schema mando a utilizar los schemas Note y User
 
 /*---------------- Ruta principal ----------------*/
@@ -9,15 +10,23 @@ router.get("/", function(req,res) {
     res.render("index.hbs");                              //Cuando el usuario inicialice la pagina web renderizara
 });                                                       //a index.hbs junto con el main y los partials
 
+router.get("/about", function(req,res) {
+  res.render("about.hbs");                                //Cuando acceda a about renderizara
+});                                                       //a about.hbs junto con el main y los partials
+
+
 /*---------------- Rutas de notas ----------------*/
 
 router.get("/add", function(req,res) {                    //Cuando el usuario acceda a add
-  res.render("note.newnote.hbs");                         //Renderizara el formulario para agregar una nota
+  if(req.user)                                            //Y si esta logeado
+    res.render("note.newnote.hbs");                       //Renderizara el formulario para agregar una nota
+  else
+    res.redirect("/");                                    ///En caso de no estar logeado redirecciona al inicio
 });
 
 router.post("/newnote", async function (req,res) {        //Cuando el usuario sea enviado a newnote desde el motodo POST
   const { title, description } = req.body;                //tomara los datos del body de donde fue enviado
-  let errors = [];                                      //Inicializo un array vacio
+  let errors = [];                                        //Inicializo un array vacio
   if (!title) {                                           //Si el usuario no escribio un titulo agrega este mensaje al array
     errors.push({ text: "Please Write a Title." });
   }
@@ -31,9 +40,8 @@ router.post("/newnote", async function (req,res) {        //Cuando el usuario se
       description
     });
   }else {
-    let newNote = new Note({ title, description });     //En dado caso que el usuario si alla llenado el formulario OK inicializa un nueva schema y guardalo en newnote ya con los datos de title y description 
-    //newNote.user = req.user.id;                         //
-    newNote.user = "algo";                               
+    let newNote = new Note({ title, description });       //En dado caso que el usuario si alla llenado el formulario OK inicializa un nueva schema y guardalo en newnote ya con los datos de title y description 
+    newNote.user = req.user.id;                           //Asigno el valor del usuario logeado
     await newNote.save();                                 //Guarda este nuevo schema en la base de datos
     req.flash("success_msg", "Note Added Successfully");  //Utilizando flash lo mando a las var globals para que posteriormente renderice con partials el mensaje correspondiente
     res.redirect("/notes");                               //Redirecciono al usuario a la seccion donde estan todas las notas
@@ -41,13 +49,21 @@ router.post("/newnote", async function (req,res) {        //Cuando el usuario se
 });
 
 router.get("/notes", async function(req,res) {            //Cuando el usuario acceda a notes 
-  const notes = await Note.find();                        //Realizo una consulta a la base de datos para encontrar todo y lo almaceno en notes
-  res.render("note.allnotes.hbs", { notes });             //Renderizo el formulario de all notes y le paso la variable notes para que imprima las tarjetas de cada una de las notas
+  if(req.user){                                           //Si el usuario esta logeado...
+    let notes = await Note.find({user: req.user.id})      //Realizo una consulta a la base de datos para encontrar todo y lo almaceno en notes
+    for(let i=0; i<notes.length; i++)                     //sobre escribo el formato para la fecha
+      notes[i]['date'] = moment(notes[i]['date']).fromNow();  //utilizando la libreria de moment
+    res.render("note.allnotes.hbs", { notes });           //Renderizo el formulario de all notes y le paso la variable notes para que imprima las tarjetas de cada una de las notas
+  }else
+    res.redirect("/");                                    //En caso de que el usuario no esta logeado sera redireccionado al inicio
 });
 
 router.get("/edit/:id",async (req, res) => {              //Si el usuario pulsa el boton de editar del formulario anterior este realizara lo siguiente:
-  const note = await Note.findById(req.params.id);        //almaceno el id que se transfirio a travez de la URL para generar una consulta a la base de datos y buscar la fula correspondiente a ese id y lo almaceno en note
-  res.render("note.editnote.hbs", { note });              //Renderizo el formulario de edit note y le paso el paraemtro de note
+  if(req.user){                                           //Si el usuario esta logeado...
+    const note = await Note.findById(req.params.id);      //almaceno el id que se transfirio a travez de la URL para generar una consulta a la base de datos y buscar la fula correspondiente a ese id y lo almaceno en note
+    res.render("note.editnote.hbs", { note });            //Renderizo el formulario de edit note y le paso el paraemtro de note
+  }else
+    res.redirect("/");                                    //En caso de que el usuario no esta logeado sera redireccionado al inicio
 });
 
 router.put("/editnote/:id", async function(req,res) {     //Si el usuario pulsa el boton de guardar del formulario anterior este realizara lo sifuiente:
@@ -103,26 +119,22 @@ router.post("/signup", async function(req,res) {          //Si el usuario pulsa 
   }
 });
 
-router.get("/signin", function(req,res) {
-  res.render("user.signin.hbs"); 
+router.get("/signin", function(req,res) {                           //Si el usuario ingresa a logearse...
+  res.render("user.signin.hbs");                                    //Renderiza el formulario signin
 });
 
-router.post("/signin", async function(req,res) {
-  const { email, password } = req.body;
-  const emailUser = await User.findOne({ email: email });
-  if (emailUser) {
-    const compare = await emailUser.matchPassword(password);
-    if(compare){
-      res.redirect("/notes");
-    }else{
-      req.flash("error_msg", "The Password doesn't match, verify your password"); 
-      res.redirect("/signin");
-    }
-  } else {
-    req.flash("error_msg", "The Email doesn't exist"); 
-    res.redirect("/signin");
-  }
-});
+//revisar el local async function configurado en ./passport.js para entender el funcionamiento de esta ruta
+router.post("/signin", passport.authenticate("local", {             //Si el usuario presiona el boton de login este manda llamar el metodo de autentificacion de passport, dicho metodo es un combinado de las 2 httas "passport", "passport-local" y la configuracion de ./passport.js
+  successRedirect: "/notes",                                        //Si el metodo estuvo ok me redirecciona a notes y atravez de las variables globales asigna los datos del usuario indicadole a tosas las rutas que el usuario esta logeado
+  failureRedirect: "/signin",                                       //Si el usuario no logro logearse ya que no existe se redirecciona a donde mismo
+  failureFlash: true                                                //Si existe un error se coloca failure en true
+}));
 
-module.exports = router;
+router.get("/logout",function (req,res) {                           //Si el usuario pulsa el boton logout...
+  req.logout();                                                     //Utilizo el motodo de passport para deslogear
+  req.flash("success_msg", "You are logged out now.");              //A travez de las variables globales aviso que el usuario se deslogeo
+  res.redirect("/signin");                                          //Se redirecciona la pagina a sign in
+})
+
+module.exports = router;                                            //Exporto todas las rutas a backend.js
 
