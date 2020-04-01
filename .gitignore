@@ -1,0 +1,4 @@
+node_modules
+.vscode
+src/passport.js
+src/public/css/fa
