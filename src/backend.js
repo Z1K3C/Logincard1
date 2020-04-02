@@ -10,6 +10,7 @@ const {allowInsecurePrototypeAccess} = require('@handlebars/allow-prototype-acce
 
 //Inicialization
 const app = express();                                  //Instancio a express en la constante app para poder usar sus metodos
+require('dotenv').config();                             //Mando llamar dotenv para poder usar las variables de entorno
 require('./database.js');                               //Mando a llamar a la base de datos
 require('./passport.js');                               //Mando a llamar la configuracion personalizada de passport para manejar logins
 
@@ -28,17 +29,17 @@ app.engine('.hbs', exphbs({                             //Inicializo el motor de
 app.set('view engine', '.hbs');                        //Inicializo el motor de plantillas en .hbs
 
 //middleware
-//app.use(express.json());                               
+app.use(express.json());                               
 app.use(express.urlencoded({extended: false}));       //A travez de este middleware puedo leer datos en los metodos GET/POST/PUT/DEL
 app.use(methodOverride('_method'));                   //A travez de este middleware puedo usar los metodos GET/POST/PUT/DEL
-app.use(session({                                     //Inicializo el modulo sessions
-  secret: 'secret',
-  resave: true,
-  saveUninitialized: true
+app.use(session({                                     //Inicializo el modulo sessions para poder guardar datos entre secicones
+  secret: 'secret',                                   //Con esto compartimos datos entre /about con /edit y /notes etc etc
+  resave: true,                                       //Previo a compartir datos con flash necesito crear seciones express para
+  saveUninitialized: true                             //cada ruta
 }));
 app.use(passport.initialize());                       //Inicializo a passport
 app.use(passport.session());                          //le indico a passport que utilizare seciones
-app.use(flash());                                     //A travez de este middleware puedo usar variables globales y compartirlas entre plantillas
+app.use(flash());                                     //A travez de este middleware puedo usar variables globales y compartirlas entre plantillas/seciones
 
 // Global Variables
 app.use((req, res, next) => {                         //Al utilizar flash desde routes este lo redireccionara a las variables locales

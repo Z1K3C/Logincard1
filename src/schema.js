@@ -10,7 +10,7 @@ const NoteSchema = new Schema(                            //Creo una tabla de no
     user: { type: String, required: true},                //Creo una columna llamada user
     date: { type: String, default: function() {           //Cada que se cree un nuevo nota, en el schema mandara a llamar
         return moment().format();                         //una funcion donde retornara la fecha en formato string
-      } } 
+      } }
   }
 );
 
@@ -18,7 +18,10 @@ const UserSchema = new Schema({                           //Creo una tabla de no
   name: { type: String, required: true },                 //Creo una columna llamada name
   email: { type: String, required: true },                //Creo una columna llamada email
   password: { type: String, required: true },             //Creo una columna llamada password
-  date: { type: Date, default: Date.now }                 //Creo una columna llamada date
+  level: { type: String, required: false},
+  date: { type: String, default: function() {             //Cada que se cree un nuevo nota, en el schema mandara a llamar
+    return moment().format();                             //una funcion donde retornara la fecha en formato string
+  } }
 });
 
 UserSchema.methods.encryptPassword = async function(password) {  //Creo un metodo asyncrono para encriptar el password

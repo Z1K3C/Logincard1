@@ -3,6 +3,7 @@ const router = express.Router();                          //Utilizo el motodo ro
 const passport = require('passport');                     //Mando llamar a passport completo
 const moment = require('moment');                         //Mando a llamar a moment para poder dar formato a la fecha
 const { Note, User } = require("../schema.js");           //De schema mando a utilizar los schemas Note y User
+const { isAuthenticated } = require("./auth.js");         //Mando a llamar el metodo que verifica si esta authentificado
 
 /*---------------- Ruta principal ----------------*/
 
@@ -14,17 +15,13 @@ router.get("/about", function(req,res) {
   res.render("about.hbs");                                //Cuando acceda a about renderizara
 });                                                       //a about.hbs junto con el main y los partials
 
-
 /*---------------- Rutas de notas ----------------*/
 
-router.get("/add", function(req,res) {                    //Cuando el usuario acceda a add
-  if(req.user)                                            //Y si esta logeado
-    res.render("note.newnote.hbs");                       //Renderizara el formulario para agregar una nota
-  else
-    res.redirect("/");                                    ///En caso de no estar logeado redirecciona al inicio
+router.get("/add", isAuthenticated, function(req,res) {   //Cuando el usuario acceda a add
+  res.render("note.newnote.hbs");                         //Renderizara el formulario para agregar una nota
 });
 
-router.post("/newnote", async function (req,res) {        //Cuando el usuario sea enviado a newnote desde el motodo POST
+router.post("/newnote", isAuthenticated, async function (req,res) {        //Cuando el usuario sea enviado a newnote desde el motodo POST
   const { title, description } = req.body;                //tomara los datos del body de donde fue enviado
   let errors = [];                                        //Inicializo un array vacio
   if (!title) {                                           //Si el usuario no escribio un titulo agrega este mensaje al array
@@ -44,39 +41,80 @@ router.post("/newnote", async function (req,res) {        //Cuando el usuario se
     newNote.user = req.user.id;                           //Asigno el valor del usuario logeado
     await newNote.save();                                 //Guarda este nuevo schema en la base de datos
     req.flash("success_msg", "Note Added Successfully");  //Utilizando flash lo mando a las var globals para que posteriormente renderice con partials el mensaje correspondiente
-    res.redirect("/notes");                               //Redirecciono al usuario a la seccion donde estan todas las notas
+    const admin = req.user.level || '';                   //Pregunto el nivel del usuario logeado, si no tiene le asigno nada a admin
+    if (admin !== "superuser") {                          //Si el usuario no es super user...
+      res.redirect("/notes");                             //redireccionalo a notes
+    }else                                                 //En caso contrario 
+      res.redirect("/admin");                             //Mandalo a la ruta admin
   }
 });
 
-router.get("/notes", async function(req,res) {            //Cuando el usuario acceda a notes 
-  if(req.user){                                           //Si el usuario esta logeado...
-    let notes = await Note.find({user: req.user.id})      //Realizo una consulta a la base de datos para encontrar todo y lo almaceno en notes
-    for(let i=0; i<notes.length; i++)                     //sobre escribo el formato para la fecha
-      notes[i]['date'] = moment(notes[i]['date']).fromNow();  //utilizando la libreria de moment
-    res.render("note.allnotes.hbs", { notes });           //Renderizo el formulario de all notes y le paso la variable notes para que imprima las tarjetas de cada una de las notas
-  }else
-    res.redirect("/");                                    //En caso de que el usuario no esta logeado sera redireccionado al inicio
+router.get("/notes", isAuthenticated, async function(req,res) {           //Cuando el usuario acceda a notes 
+  let notes = await Note.find({user: req.user.id}).sort({date: 'desc'});  //Realizo una consulta a la base de datos para encontrar todo y lo almaceno en notes
+  for(let i=0; i<notes.length; i++)                         //sobre escribo el formato para la fecha
+    notes[i]['date'] = moment(notes[i]['date']).fromNow();  //utilizando la libreria de moment
+  res.render("note.allnotes.hbs", { notes });               //Renderizo el formulario de all notes y le paso la variable notes para que imprima las tarjetas de cada una de las notas
+
 });
 
-router.get("/edit/:id",async (req, res) => {              //Si el usuario pulsa el boton de editar del formulario anterior este realizara lo siguiente:
-  if(req.user){                                           //Si el usuario esta logeado...
-    const note = await Note.findById(req.params.id);      //almaceno el id que se transfirio a travez de la URL para generar una consulta a la base de datos y buscar la fula correspondiente a ese id y lo almaceno en note
-    res.render("note.editnote.hbs", { note });            //Renderizo el formulario de edit note y le paso el paraemtro de note
-  }else
-    res.redirect("/");                                    //En caso de que el usuario no esta logeado sera redireccionado al inicio
+router.get("/edit/:id", isAuthenticated, async (req, res) => {  //Si el usuario pulsa el boton de editar del formulario anterior este realizara lo siguiente:
+  const note = await Note.findById(req.params.id);              //almaceno el id que se transfirio a travez de la URL para generar una consulta a la base de datos y buscar la fula correspondiente a ese id y lo almaceno en note
+  if (note.user != req.user.id) {                               //Si al usuario no le pertenecen las notas
+    req.flash("error_msg", "Not Authorized");                   //Indicar que no esta autorizado
+    return res.redirect("/notes");
+  }else                                                         //En caso contrario...
+    res.render("note.editnote.hbs", { note });            //Renderizo el formulario de edit note y le paso el parametro de note
+
 });
 
-router.put("/editnote/:id", async function(req,res) {     //Si el usuario pulsa el boton de guardar del formulario anterior este realizara lo sifuiente:
+router.put("/editnote/:id", isAuthenticated, async function(req,res) {     //Si el usuario pulsa el boton de guardar del formulario anterior este realizara lo sifuiente:
   const { title, description } = req.body;                //Guardara el title y el description obtenidos a travez de body
-  await Note.findByIdAndUpdate(req.params.id, { title, description });  //Realiza un update de la fila con el id
+  const date = moment().format();
+  await Note.findByIdAndUpdate(req.params.id, { title, description, date });  //Realiza un update de la fila con el id
   req.flash("success_msg", "Note Updated Successfully");  //Utilizando flash lo mando a las var globals para que posteriormente renderice con partials el mensaje correspondiente
-  res.redirect("/notes");                                 //Redirecciono al usuario a donde estan todas las notas
+  const admin = req.user.level || '';                   //Pregunto el nivel del usuario logeado, si no tiene le asigno nada a admin
+  if (admin !== "superuser") {                          //Si el usuario no es super user...
+    res.redirect("/notes");                             //redireccionalo a notes
+  }else                                                 //En caso contrario 
+    res.redirect("/admin");                             //Mandalo a la ruta admin       
 });
 
-router.delete("/delete/:id",  async (req, res) => {       //Si el usuario pulsa el boton de eliminar del formulario de all notes
+router.delete("/delete/:id", isAuthenticated, async (req, res) => {       //Si el usuario pulsa el boton de eliminar del formulario de all notes
   await Note.findByIdAndDelete(req.params.id);            //Realizo una consulta del tipo eleminiar a la base de datos a traves de la fila con id de numero tal
   req.flash("success_msg", "Note Deleted Successfully");  //Utilizando flash lo mando a las var globals para que posteriormente renderice con partials el mensaje correspondiente 
-  res.redirect("/notes");                                 //Redirecciono al usuario a donde estan todas las notas
+  const admin = req.user.level || '';                   //Pregunto el nivel del usuario logeado, si no tiene le asigno nada a admin
+  if (admin !== "superuser") {                          //Si el usuario no es super user...
+    res.redirect("/notes");                             //redireccionalo a notes
+  }else                                                 //En caso contrario 
+    res.redirect("/admin");                             //Mandalo a la ruta admin
+});
+
+router.get("/admin", isAuthenticated, async (req, res) => {  //Si el usuario tiene los privilegios, en el partial.hbs mostrara un boton adicional que tendra acceso a esta ruta
+  const admin = req.user.level || '';                        //Consulto el nivel del usuario, si tiene algo lo guarda en admin, en caso contrario gguarda un string vacio
+  if(admin === "superuser"){                                //Si el usuario tiene el nivel
+    let notes = await Note.find().sort({date: 'desc'});     //Realizo una consulta a la base de datos para encontrar todo y lo almaceno en notes
+    for(let i=0; i<notes.length; i++){                      //Realizo un for por cada nota almacenada en la DB
+      let userrow = await User.findById( notes[i]['user'] );  //Almaceno al usuario de la nota
+      notes[i]['date'] = moment(notes[i]['date']).format('LLLL');   //Extraigo la fecha de creacion de la nota y la convierto con moment js method
+      notes[i]['user'] = userrow['name'];                   //Extraigo el nombre del que creo la nota y sobrescribo en el arreglo
+    }                   
+    res.render("note.adminotes.hbs", { notes });           //Renderizo el formulario de all notes y le paso la variable notes para que imprima las tarjetas de cada una de las notas
+  }else{                                                   //En caso de no contar con los privilegios...
+    req.logout();                                         //Deslogea al usuario
+    req.flash("error_msg", "You are not Administrator");               //Indica que no esta  autorizado
+    return res.redirect("/signin");                       //Redirecciona a sign in
+  }
+});
+
+router.get("/adminedit/:id", isAuthenticated, async (req, res) => {              //Si el usuario pulsa el boton de editar del formulario admin lo redirecciona a esta ruta
+  const admin = req.user.level || '';                     //Consulto el nuvel del usuario
+  if (admin !== "superuser") {
+    req.flash("error_msg", "You are not Administrator");  //Si no tiene permisos lo redirecciona a sus notas
+    return res.redirect("/notes");
+  }else{                                                  //Si tiene el nivel puede ver todas las notas
+    const note = await Note.findById(req.params.id);      //almaceno el id que se transfirio a travez de la URL para generar una consulta a la base de datos y buscar la fila correspondiente a ese id y lo almaceno en note
+    res.render("note.editnote.hbs", { note });            //Renderizo el formulario de edit note y le paso el paraemtro de note
+  }
 });
 
 /*---------------- Rutas de user ----------------*/
